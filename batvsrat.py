@@ -23,8 +23,8 @@ def savefig(path):
     plt.show()
 
 # ---------- 1) Load ----------
-df1 = pd.read_csv("assignment 2/our work/dataset1.csv")
-df2 = pd.read_csv("assignment 2/our work/dataset2.csv")
+df1 = pd.read_csv("dataset1.csv")
+df2 = pd.read_csv("dataset2.csv")
 
 # print(df1.head)
 # print(df1.describe)
