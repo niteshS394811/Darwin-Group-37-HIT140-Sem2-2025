@@ -1,7 +1,10 @@
 # ============================================================
-# HIT140 Project – Complete Analysis Pipeline
+# HIT140 Project – S225 FOUNDATIONS OF DATA SCIENCE
+#Bidhan Chaudhary (S394807)
+#Dipesh Sedhai (S395457)
+#Nitesh Raj Chaudhary (S394811)
+#Roshan Kumar Shrestha (S395498)
 # Datasets: dataset1.csv (bat landings, per-event) & dataset2.csv (30-min windows)
-# Merge key: start_time (df1) ~ time (df2) via nearest match within 30 minutes
 # ============================================================
 
 import pandas as pd
@@ -179,7 +182,7 @@ savefig("avg_landing_time_by_habit_barchart.png")
 ct = pd.crosstab(df1_clean["habit_cleaned"], [df1_clean["risk"], df1_clean["reward"]])
 
 # Re-order & flatten column labels to intuitive order:
-# (0,0)=Low risk/Low reward, (1,0)=High risk/Low reward, (0,1)=Low risk/High reward, (1,1)=High risk/High reward
+# (0,0)=Low risk/Low reward,(0,1)=Low risk/High reward, (1,0)=High risk/Low reward,  (1,1)=High risk/High reward
 ct = ct.reorder_levels([0, 1], axis=1).sort_index(axis=1)
 ct.columns = [
     "Low Risk / Low Reward",
