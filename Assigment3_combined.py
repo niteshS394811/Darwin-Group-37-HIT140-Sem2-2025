@@ -14,7 +14,7 @@ import seaborn as sns
 from scipy import stats
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from statsmodels.stats.outliers_influence import variance_inflation_factor # Added for VIF
+from statsmodels.stats.outliers_influence import variance_inflation_factor 
 
 # sklearn usage (used for simple train/test R²)
 try:
@@ -68,25 +68,19 @@ def clean_dataset1(df1):
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
 
-    # *** FIX: Robustly derive month and season from start_time ***
     if "start_time" in df.columns:
-        # Extract month number from parsed datetime
         df["month_num"] = df["start_time"].dt.month
-        # Map season using the reliable month number
         df["season"] = df["month_num"].apply(season_from_month)
     else:
-        # If start_time is missing, fall back to original 'month' column if present
         if "month" in df.columns:
             df["month_num"] = pd.to_numeric(df["month"], errors="coerce")
             df["season"] = df["month_num"].apply(season_from_month)
         else:
              df["season"] = np.nan
-    # ***************************************************************
 
-    #  Coerce numeric columns
     numeric_cols = [
         "bat_landing_to_food", "seconds_after_rat_arrival",
-        "risk", "reward", "month", "hours_after_sunset" # 'season' removed as it's now derived
+        "risk", "reward", "month", "hours_after_sunset" 
     ]
     for col in numeric_cols:
         if col in df.columns:
@@ -152,12 +146,9 @@ def clean_dataset2(df2):
 
     if "time" in df.columns:
         df["time"] = pd.to_datetime(df["time"], errors="coerce", dayfirst=True)
-        # *** FIX: Robustly derive month and season from time ***
         df["month_num"] = df["time"].dt.month
         df["season"] = df["month_num"].apply(season_from_month)
-        # ********************************************************
     else:
-        # Fallback if time is missing
         if "month" in df.columns:
             df["month_num"] = pd.to_numeric(df["month"], errors="coerce")
             df["season"] = df["month_num"].apply(season_from_month)
@@ -184,7 +175,7 @@ def clean_dataset2(df2):
     if "rat_minutes" in df.columns:
         df = df[df["rat_minutes"].between(0, 30)]
 
-    # Remove negatives and winsorize extremes on key numeric columns (no change)
+    # Remove negatives and window extremes on key numeric columns (no change)
     for col in ["rat_arrival_number", "food_availability", "bat_landing_number"]:
         if col in df.columns:
             df = df[df[col] >= 0]
@@ -234,7 +225,7 @@ def merge_by_date(d1, d2):
             agg_dict[c] = "mean"
     if "rat_present" in d2.columns:
         agg_dict["rat_present"] = "max"  # 1 if rats present any time that day
-    if "month_num" in d2.columns: # Use the reliable month_num for 'first'
+    if "month_num" in d2.columns: 
         agg_dict["month_num"] = "first"
     if "season" in d2.columns:
         agg_dict["season"] = "first"
@@ -365,7 +356,6 @@ if len(dataA) >= 5 and predictors:
     X = dataA[predictors]
     y = dataA[response]
 
-    # Optional sklearn evaluation
     if SKLEARN_AVAILABLE:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
         lr = LinearRegression()
@@ -419,7 +409,7 @@ else:
 # Add predicted values for plotting (if OLS model exists)
 if 'ols_model' in globals():
     df_plot = df_merged.copy()
-    X_const_full = sm.add_constant(df_merged[predictors].fillna(X.mean())) # Use mean imputation for plotting predictions on full data
+    X_const_full = sm.add_constant(df_merged[predictors].fillna(X.mean())) 
     # Predict on the full (or imputed) dataset for visualization
     df_plot["predicted_vigilance"] = ols_model.predict(X_const_full.dropna())
 
@@ -499,7 +489,6 @@ if not df_b_full.empty:
         try:
             df_int = df_b_full.dropna(subset=[response, "rat_minutes", "hours_after_sunset"])
             df_int["season_cat"] = df_int["season_use"].astype("category")
-            # Only include predictors used in the main model (except rat_minutes which is used for interaction)
             covariates = [p for p in predictors if p not in ["rat_minutes", "rat_pressure"]]
             formula = f"{response} ~ rat_minutes * season_cat + {' + '.join(covariates)}"
             model_inter = smf.ols(formula, data=df_int).fit()
