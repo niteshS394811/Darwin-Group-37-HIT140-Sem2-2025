@@ -423,3 +423,98 @@ if 'ols_model' in globals():
     # Predict on the full (or imputed) dataset for visualization
     df_plot["predicted_vigilance"] = ols_model.predict(X_const_full.dropna())
 
+
+# ---------- Investigation B: Seasonal comparison (Winter vs Spring) ----------
+# Ensure we have a consistent season column in merged data
+if "season" in df_merged.columns:
+    df_merged["season_use"] = df_merged["season"]
+elif "season_event" in df_merged.columns:
+    df_merged["season_use"] = df_merged["season_event"]
+else:
+    # fallback to mapping from start_time month
+    if "start_time" in df_merged.columns:
+        df_merged["season_use"] = pd.to_datetime(df_merged["start_time"]).dt.month.apply(season_from_month)
+    else:
+        df_merged["season_use"] = np.nan
+
+# Filter to Winter and Spring only
+df_b = df_merged[df_merged["season_use"].isin(["Winter", "Spring"])].copy()
+print("\n[Investigation B] counts by season (Winter/Spring):\n", df_b["season_use"].value_counts().to_dict())
+
+# prepare data for seasonal OLS (dropna for required cols)
+if predictors:
+    df_b_full = df_b[[response] + predictors + ["season_use"]].dropna()
+else:
+    df_b_full = pd.DataFrame()
+
+def fit_by_season(df, season_label):
+    df_s = df[df["season_use"] == season_label]
+    if len(df_s) < 10:
+        print(f"WARNING: small sample for {season_label}: n={len(df_s)}")
+        return None
+    Xs = df_s[predictors]
+    ys = df_s[response]
+    Xs_const = sm.add_constant(Xs)
+    model = sm.OLS(ys, Xs_const).fit()
+    return model
+
+if not df_b_full.empty:
+    model_winter = fit_by_season(df_b_full, "Winter")
+    model_spring = fit_by_season(df_b_full, "Spring")
+
+    if model_winter and model_spring:
+        print("\n[Investigation B] Winter model summary:\n", model_winter.summary())
+        print("\n[Investigation B] Spring model summary:\n", model_spring.summary())
+
+        # Compare coefficients
+        coefs = pd.DataFrame({
+            "var": model_winter.params.index,
+            "coef_winter": model_winter.params.values,
+            "se_winter": model_winter.bse.values,
+        }).merge(pd.DataFrame({
+            "var": model_spring.params.index,
+            "coef_spring": model_spring.params.values,
+            "se_spring": model_spring.bse.values,
+        }), on="var", how="outer").fillna(0)
+
+        coefs["coef_diff"] = coefs["coef_winter"] - coefs["coef_spring"]
+        coefs["se_diff"] = np.sqrt(coefs["se_winter"]**2 + coefs["se_spring"]**2)
+        coefs["z_diff"] = coefs["coef_diff"] / coefs["se_diff"].replace(0, np.nan)
+        coefs["p_diff_two_sided"] = 2 * (1 - stats.norm.cdf(np.abs(coefs["z_diff"])))
+        print("\n[Investigation B] Coefficient difference (Winter - Spring):\n", coefs[["var","coef_winter","coef_spring","coef_diff","se_diff","z_diff","p_diff_two_sided"]].to_string(index=False))
+
+        # Plot coefficient comparison
+        plot_df = coefs.set_index("var")[["coef_winter","coef_spring"]].drop(index='const', errors='ignore') # Drop constant for cleaner plot
+        plt.figure(figsize=(10,6))
+        plot_df.plot(kind="bar", ax=plt.gca(), color=["#1f77b4", "#ff7f0e"])
+        plt.title("Linear Regression Coefficient Comparison: Winter vs Spring", fontsize=14)
+        plt.ylabel("Coefficient Value", fontsize=12)
+        plt.xlabel("Predictor Variables", fontsize=12)
+        plt.xticks(rotation=45, ha="right", fontsize=10)
+        plt.legend(["Winter Model", "Spring Model"], title="Season", fontsize=10)
+        plt.grid(axis='y', linestyle='--', alpha=0.6)
+        savefig("coeff_compare_winter_spring.png")
+
+        # Interaction model (season * rat_minutes) - test moderator effect
+        try:
+            df_int = df_b_full.dropna(subset=[response, "rat_minutes", "hours_after_sunset"])
+            df_int["season_cat"] = df_int["season_use"].astype("category")
+            # Only include predictors used in the main model (except rat_minutes which is used for interaction)
+            covariates = [p for p in predictors if p not in ["rat_minutes", "rat_pressure"]]
+            formula = f"{response} ~ rat_minutes * season_cat + {' + '.join(covariates)}"
+            model_inter = smf.ols(formula, data=df_int).fit()
+            print("\n[Investigation B] Interaction model summary:\n", model_inter.summary())
+            interaction_terms = [term for term in model_inter.pvalues.index if ":" in term]
+            if interaction_terms:
+                print("\n[Investigation B] Interaction term p-values:\n", model_inter.pvalues.loc[interaction_terms])
+            else:
+                print("\n[Investigation B] No interaction terms found in model formula.\n")
+        except Exception as e:
+            print(" Interaction model failed due to:", e)
+    else:
+        print("\n[Investigation B] Models could not be fitted due to small sample size in one or both seasons.")
+else:
+    print("\n[Investigation B] Not enough seasonal data to fit models.")
+
+
+
