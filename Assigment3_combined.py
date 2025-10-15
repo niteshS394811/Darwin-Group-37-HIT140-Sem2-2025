@@ -347,3 +347,79 @@ if "rat_present" in df2_clean.columns:
     summary_window = df2_clean.groupby("rat_present")[["bat_landing_number", "food_availability", "rat_minutes"]].mean()
     print("\n[dataset2] Means by rat presence:\n", summary_window)
 
+# ----------  Investigation A: Linear Regression (OLS) ----------
+response = "vigilance_delay_s"
+# Candidate predictors (using the non-suffixed names which are correct post-merge)
+candidate_predictors = [
+    "rat_minutes", "rat_pressure", "rat_arrival_number",
+    "food_availability", "hours_after_sunset", "bat_landing_number"
+]
+# select predictors actually present in merged frame
+predictors = [p for p in candidate_predictors if p in df_merged.columns]
+
+# Prepare dataset for LR
+dataA = df_merged[[response] + predictors].dropna()
+print(f"\n[Investigation A] rows available for LR: {len(dataA)}   Predictors used: {predictors}")
+
+if len(dataA) >= 5 and predictors:
+    X = dataA[predictors]
+    y = dataA[response]
+
+    # Optional sklearn evaluation
+    if SKLEARN_AVAILABLE:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        lr = LinearRegression()
+        lr.fit(X_train, y_train)
+        y_pred = lr.predict(X_test)
+        print("\n[Investigation A] Sklearn LR evaluation (test):")
+        print(" R2 (test):", r2_score(y_test, y_pred))
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        print(" RMSE (test):", rmse)
+
+    # Statsmodels OLS (full-sample) for inference
+    X_const = sm.add_constant(X)
+    ols_model = sm.OLS(y, X_const).fit()
+    print("\n[Investigation A] OLS summary:\n")
+    print(ols_model.summary())
+
+    # Residual diagnostics: histogram and residuals vs fitted
+    plt.figure(num=1, figsize=(8,6))
+    sns.histplot(ols_model.resid, kde=True, color='skyblue')
+    plt.title("Investigation A: Residuals Distribution", fontsize=14)
+    plt.xlabel("Residuals (Observed - Predicted Vigilance Delay, s)", fontsize=12)
+    plt.ylabel("Frequency", fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    savefig("investA_residuals_hist.png")
+
+    plt.figure(num=2, figsize=(8,6))
+    plt.scatter(ols_model.fittedvalues, ols_model.resid, alpha=0.6, color='orange')
+    plt.axhline(0, color="red", linestyle="--")
+    plt.title("Investigation A: Residuals vs Fitted Values", fontsize=14)
+    plt.xlabel("Fitted values (Predicted Vigilance Delay, s)", fontsize=12)
+    plt.ylabel("Residuals (Observed - Predicted, s)", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    savefig("investA_resid_vs_fitted.png")
+
+    # Multicollinearity: correlation heatmap and VIF
+    plt.figure(figsize=(8,6))
+    sns.heatmap(X.corr(), annot=True, fmt=".2f", cmap="coolwarm", vmin=-1, vmax=1)
+    plt.title("Predictor correlation (Investigation A)")
+    savefig("investA_corr_heatmap.png")
+
+    X_vif = sm.add_constant(X)
+    vif_df = pd.DataFrame({
+        "variable": X_vif.columns,
+        "VIF": [variance_inflation_factor(X_vif.values, i) for i in range(X_vif.shape[1])]
+    })
+    print("\n[Investigation A] VIFs:\n", vif_df.to_string(index=False))
+else:
+    print("\n[Investigation A] Not enough data or no predictors available for LR.")
+
+
+# Add predicted values for plotting (if OLS model exists)
+if 'ols_model' in globals():
+    df_plot = df_merged.copy()
+    X_const_full = sm.add_constant(df_merged[predictors].fillna(X.mean())) # Use mean imputation for plotting predictions on full data
+    # Predict on the full (or imputed) dataset for visualization
+    df_plot["predicted_vigilance"] = ols_model.predict(X_const_full.dropna())
+
