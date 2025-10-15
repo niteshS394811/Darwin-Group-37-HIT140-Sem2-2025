@@ -517,4 +517,67 @@ else:
     print("\n[Investigation B] Not enough seasonal data to fit models.")
 
 
+# ----------  Final reporting summary ----------
+print("\n--- Final reporting: top-level summaries ---")
+print("Dataset1 (event-level) rows (clean):", len(df1_clean))
+print("Dataset2 (window-level) rows (clean):", len(df2_clean))
+print("Merged (date-level) rows:", len(df_merged))
 
+if 'ols_model' in globals():
+    print("\n[Investigation A] OLS coefficients (full sample):")
+    print(ols_model.params.to_string())
+
+if 'coefs' in globals():
+    print("\n[Investigation B] Coefficient differences (Winter - Spring):")
+    print(coefs[["var","coef_diff","p_diff_two_sided"]].to_string(index=False))
+
+print("\nScript complete. Plots saved as PNGs for slides.")
+
+
+
+# -------------------------------
+# Observed vs Predicted Visualizations
+# -------------------------------
+
+df_plot = df_merged.copy()
+
+if 'ols_model' in globals():
+    df_plot["predicted_vigilance"] = ols_model.fittedvalues
+else:
+    raise ValueError("OLS model not found. Run Investigation A first.")
+
+# Observed vs Predicted over Date
+if "date" in df_plot.columns:
+    plt.figure(figsize=(12,6))
+    plt.plot(df_plot["date"], df_plot["vigilance_delay_s"], label="Observed", marker='o', linestyle='None', alpha=0.6)
+    plt.plot(df_plot["date"], df_plot["predicted_vigilance"], label="Predicted", marker='x', linestyle='-', color='red')
+    plt.xlabel("Date")
+    plt.ylabel("Vigilance Delay (s)")
+    plt.title("Observed vs Predicted Vigilance Delay Over Time")
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    savefig("obs_vs_pred_date.png")
+
+
+# Observed vs Predicted by Season
+if "season_use" in df_plot.columns:
+    plt.figure(figsize=(8,6))
+    obs_means = df_plot.groupby("season_use")["vigilance_delay_s"].mean()
+    pred_means = df_plot.groupby("season_use")["predicted_vigilance"].mean()
+    df_season_compare = pd.DataFrame({"Observed": obs_means, "Predicted": pred_means}).reset_index()
+    
+    x = np.arange(len(df_season_compare))
+    width = 0.35
+    plt.bar(x - width/2, df_season_compare["Observed"], width, label="Observed", color="skyblue")
+    plt.bar(x + width/2, df_season_compare["Predicted"], width, label="Predicted", color="salmon")
+    plt.xticks(x, df_season_compare["season_use"])
+    plt.ylabel("Vigilance Delay (s)")
+    plt.title("Observed vs Predicted Vigilance Delay by Season")
+    plt.legend()
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    savefig("obs_vs_pred_season.png")
+
+
+
+print(" Observed vs Predicted plots generated and saved.")
